@@ -34,7 +34,9 @@ class InMemoryConcertRepository extends InMemoryRepository<Concert>
           : item.copyWith(deletedAt: deletedAt);
 
   @override
-  Future<PageResult<Concert>> find(ConcertQuery query, {CancelToken? cancelToken}) async => page(
+  Future<PageResult<Concert>> find(ConcertQuery query,
+          {CancelToken? cancelToken}) async =>
+      page(
         pageNumber: query.page,
         pageSize: query.size,
         filter: (rows) {

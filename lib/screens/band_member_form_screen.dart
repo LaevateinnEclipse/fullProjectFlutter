@@ -194,23 +194,23 @@ class _BandMemberFormScreenState extends State<BandMemberFormScreen> {
     setState(() => _saving = true);
     try {
       await members.save(BandMember(
-            id: _member?.id ?? 0,
-            firstName: form.string('firstName'),
-            lastName: form.string('lastName'),
-            role: form.string('role'),
-            yearsInBand: form.number('yearsInBand'),
-            fee: form.number('fee'),
-            email: form.string('email'),
-            bio: form.string('bio'),
-            photoUrl: form.string('photoUrl'),
-            joinedYear: form.number('joinedYear'),
-            stageName: form.string('stageName'),
-            maskCode: form.string('maskCode'),
-            appointedOn: form.string('appointedOn'),
-            albumIds: form.selection('albumIds'),
-            concertIds: _member?.concertIds ?? const [],
-            deletedAt: _member?.deletedAt,
-          ));
+        id: _member?.id ?? 0,
+        firstName: form.string('firstName'),
+        lastName: form.string('lastName'),
+        role: form.string('role'),
+        yearsInBand: form.number('yearsInBand'),
+        fee: form.number('fee'),
+        email: form.string('email'),
+        bio: form.string('bio'),
+        photoUrl: form.string('photoUrl'),
+        joinedYear: form.number('joinedYear'),
+        stageName: form.string('stageName'),
+        maskCode: form.string('maskCode'),
+        appointedOn: form.string('appointedOn'),
+        albumIds: form.selection('albumIds'),
+        concertIds: _member?.concertIds ?? const [],
+        deletedAt: _member?.deletedAt,
+      ));
       _dirty = false;
       await catalog.load(force: true);
       if (!mounted) return;
@@ -248,9 +248,8 @@ class _BandMemberFormScreenState extends State<BandMemberFormScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: () => context.go('/members')),
-          title: Text(widget.isEditing
-              ? 'Редактирование участника'
-              : 'Новый участник'),
+          title: Text(
+              widget.isEditing ? 'Редактирование участника' : 'Новый участник'),
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())

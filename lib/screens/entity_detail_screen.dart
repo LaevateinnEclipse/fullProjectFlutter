@@ -12,6 +12,7 @@ import '../repositories/band_member_repository.dart';
 import '../repositories/concert_repository.dart';
 import '../repositories/merch_repository.dart';
 import '../repositories/track_repository.dart';
+import '../widgets/record_actions.dart';
 
 class EntityDetailScreen extends StatefulWidget {
   final String collection;
@@ -48,9 +49,8 @@ class _EntityDetailScreenState extends State<EntityDetailScreen> {
       for (final member in await members.all(includeDeleted: true))
         member.id: member.fullName
     };
-    String names(List<int> ids, Map<int, String> options) => ids.isEmpty
-        ? '—'
-        : ids.map((id) => options[id] ?? '#$id').join(', ');
+    String names(List<int> ids, Map<int, String> options) =>
+        ids.isEmpty ? '—' : ids.map((id) => options[id] ?? '#$id').join(', ');
     String date(DateTime value) =>
         '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
     final rows = <String, String>{'Номер записи': '${widget.id}'};
@@ -131,14 +131,16 @@ class _EntityDetailScreenState extends State<EntityDetailScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          leading: BackButton(onPressed: () => context.go('/${widget.collection}')),
+          leading:
+              BackButton(onPressed: () => context.go('/${widget.collection}')),
           title: const Text('Карточка'),
           actions: [
-            IconButton(
-                tooltip: 'Редактировать',
-                onPressed: () =>
-                    context.go('/${widget.collection}/${widget.id}/edit'),
-                icon: const Icon(Icons.edit_outlined))
+            if (canEditCollection(context, widget.collection))
+              IconButton(
+                  tooltip: 'Редактировать',
+                  onPressed: () =>
+                      context.go('/${widget.collection}/${widget.id}/edit'),
+                  icon: const Icon(Icons.edit_outlined))
           ],
         ),
         body: FutureBuilder<Map<String, String>?>(
@@ -151,15 +153,24 @@ class _EntityDetailScreenState extends State<EntityDetailScreen> {
             if (rows == null) {
               return const Center(child: Text('Запись не найдена'));
             }
-            return ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                for (final row in rows.entries)
-                  ListTile(
-                    title: Text(row.key),
-                    subtitle: Text(row.value.isEmpty ? '—' : row.value),
-                  )
-              ],
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    for (final row in rows.entries)
+                      ListTile(
+                        title: Text(row.key),
+                        subtitle: Text(
+                          row.value.isEmpty ? '—' : row.value,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                  ],
+                ),
+              ),
             );
           },
         ),

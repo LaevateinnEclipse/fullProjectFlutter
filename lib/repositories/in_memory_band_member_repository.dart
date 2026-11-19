@@ -56,7 +56,8 @@ class InMemoryBandMemberRepository implements BandMemberRepository {
       _items.fold<int>(0, (maxId, item) => item.id > maxId ? item.id : maxId) +
       1;
   @override
-  Future<PageResult<BandMember>> find(BandMemberQuery q, {CancelToken? cancelToken}) async {
+  Future<PageResult<BandMember>> find(BandMemberQuery q,
+      {CancelToken? cancelToken}) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (q.yearsFrom != null && q.yearsTo != null && q.yearsFrom! > q.yearsTo!) {
       throw ArgumentError('Стаж «от» больше стажа «до»');
@@ -108,9 +109,8 @@ class InMemoryBandMemberRepository implements BandMemberRepository {
   }
 
   @override
-  Future<List<BandMember>> all({bool includeDeleted = false}) async => _items
-      .where((item) => includeDeleted || !item.isDeleted)
-      .toList();
+  Future<List<BandMember>> all({bool includeDeleted = false}) async =>
+      _items.where((item) => includeDeleted || !item.isDeleted).toList();
 
   @override
   Future<BandMember> save(BandMember member) async {

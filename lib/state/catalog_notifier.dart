@@ -124,9 +124,10 @@ class CatalogNotifier extends ChangeNotifier {
 
   List<String> get albumTypes => Album.types;
   List<String> get roles {
-    final values = {...bandRoles, ..._memberOptions.map((member) => member.role)}
-        .where((role) => role.trim().isNotEmpty)
-        .toList()
+    final values = {
+      ...bandRoles,
+      ..._memberOptions.map((member) => member.role)
+    }.where((role) => role.trim().isNotEmpty).toList()
       ..sort();
     return values;
   }
@@ -141,9 +142,10 @@ class CatalogNotifier extends ChangeNotifier {
   }
 
   List<String> get genres {
-    final values = {...trackGenres, ..._trackOptions.map((track) => track.genre)}
-        .where((value) => value.trim().isNotEmpty)
-        .toList()
+    final values = {
+      ...trackGenres,
+      ..._trackOptions.map((track) => track.genre)
+    }.where((value) => value.trim().isNotEmpty).toList()
       ..sort();
     return values;
   }

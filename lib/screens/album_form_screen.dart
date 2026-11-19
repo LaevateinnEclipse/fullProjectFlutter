@@ -121,18 +121,18 @@ class _AlbumFormScreenState extends State<AlbumFormScreen> {
     setState(() => _saving = true);
     try {
       await albums.save(Album(
-            id: _album?.id ?? 0,
-            title: form.string('title'),
-            catalogCode: form.string('catalogCode'),
-            albumType: form.string('albumType'),
-            year: form.number('year'),
-            label: form.string('label'),
-            coverUrl: form.string('coverUrl'),
-            memberIds: _album?.memberIds ?? const [],
-            trackIds: _album?.trackIds ?? const [],
-            concertIds: _album?.concertIds ?? const [],
-            deletedAt: _album?.deletedAt,
-          ));
+        id: _album?.id ?? 0,
+        title: form.string('title'),
+        catalogCode: form.string('catalogCode'),
+        albumType: form.string('albumType'),
+        year: form.number('year'),
+        label: form.string('label'),
+        coverUrl: form.string('coverUrl'),
+        memberIds: _album?.memberIds ?? const [],
+        trackIds: _album?.trackIds ?? const [],
+        concertIds: _album?.concertIds ?? const [],
+        deletedAt: _album?.deletedAt,
+      ));
       _dirty = false;
       await catalog.load(force: true);
       if (!mounted) return;
@@ -166,7 +166,8 @@ class _AlbumFormScreenState extends State<AlbumFormScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: () => context.go('/albums')),
-          title: Text(widget.isEditing ? 'Редактирование альбома' : 'Новый альбом'),
+          title: Text(
+              widget.isEditing ? 'Редактирование альбома' : 'Новый альбом'),
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -176,7 +177,9 @@ class _AlbumFormScreenState extends State<AlbumFormScreen> {
                     key: _entityFormKey,
                     fields: _fields(),
                     formKey: _formKey,
-                    saveLabel: widget.isEditing ? 'Сохранить изменения' : 'Создать альбом',
+                    saveLabel: widget.isEditing
+                        ? 'Сохранить изменения'
+                        : 'Создать альбом',
                     onSubmit: _save,
                     onCancel: () => context.go('/albums'),
                     saving: _saving,

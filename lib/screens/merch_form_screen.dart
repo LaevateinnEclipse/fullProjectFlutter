@@ -128,16 +128,16 @@ class _MerchFormScreenState extends State<MerchFormScreen> {
     setState(() => _saving = true);
     try {
       await merch.save(MerchItem(
-            id: _item?.id ?? 0,
-            name: form.string('name'),
-            sku: form.string('sku'),
-            category: form.string('category'),
-            stock: form.number('stock'),
-            price: form.number('price'),
-            sizeIds: _item?.sizeIds ?? const [],
-            albumId: form.number('albumId'),
-            deletedAt: _item?.deletedAt,
-          ));
+        id: _item?.id ?? 0,
+        name: form.string('name'),
+        sku: form.string('sku'),
+        category: form.string('category'),
+        stock: form.number('stock'),
+        price: form.number('price'),
+        sizeIds: _item?.sizeIds ?? const [],
+        albumId: form.number('albumId'),
+        deletedAt: _item?.deletedAt,
+      ));
       _dirty = false;
       await catalog.load(force: true);
       if (!mounted) return;
@@ -172,7 +172,8 @@ class _MerchFormScreenState extends State<MerchFormScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: () => context.go('/merch')),
-          title: Text(widget.isEditing ? 'Редактирование мерча' : 'Новый товар'),
+          title:
+              Text(widget.isEditing ? 'Редактирование мерча' : 'Новый товар'),
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -182,8 +183,9 @@ class _MerchFormScreenState extends State<MerchFormScreen> {
                     key: _entityFormKey,
                     fields: _fields(catalog),
                     formKey: _formKey,
-                    saveLabel:
-                        widget.isEditing ? 'Сохранить изменения' : 'Создать товар',
+                    saveLabel: widget.isEditing
+                        ? 'Сохранить изменения'
+                        : 'Создать товар',
                     onSubmit: _save,
                     onCancel: () => context.go('/merch'),
                     saving: _saving,

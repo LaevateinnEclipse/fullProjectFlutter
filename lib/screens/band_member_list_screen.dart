@@ -9,6 +9,8 @@ import '../state/catalog_notifier.dart';
 import '../state/list_notifiers.dart';
 import '../widgets/common.dart';
 import '../widgets/entity_table.dart';
+import '../widgets/record_actions.dart';
+import '../widgets/responsive.dart';
 
 class BandMemberListScreen extends StatefulWidget {
   final BandMemberQuery query;
@@ -54,16 +56,19 @@ class _BandMemberListScreenState extends State<BandMemberListScreen> {
     final n = c.watch<BandMemberListNotifier>();
     return AppScaffold(
         title: 'Состав группы',
-        index: 1,
+        index: 2,
+        onRefresh: n.load,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: () => context.go('/members/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Новый участник')))),
+          const ReadOnlyNotice(collection: 'members'),
+          if (canEditCollection(context, 'members'))
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                        onPressed: () => context.go('/members/new'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый участник')))),
           filters(n),
           if (n.hasSelection) selection(n),
           Expanded(child: body(n)),
@@ -80,93 +85,103 @@ class _BandMemberListScreenState extends State<BandMemberListScreen> {
 
   Widget filters(BandMemberListNotifier n) {
     final q = widget.query;
+    return AdaptiveFilters(
+        child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              SizedBox(
+                  width: 280,
+                  child: TextFormField(
+                      initialValue: q.search,
+                      decoration: const InputDecoration(
+                          labelText: 'Поиск: фамилия или роль',
+                          border: OutlineInputBorder()),
+                      onChanged: (v) {
+                        timer?.cancel();
+                        timer = Timer(const Duration(milliseconds: 350),
+                            () => go(q.copyWith(search: v)));
+                      })),
+              SizedBox(
+                  width: 270,
+                  child: DropdownButtonFormField<String?>(
+                      // value: q.role,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Роль', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Все роли',
+                                overflow: TextOverflow.ellipsis)),
+                        ...bandRoles.map((v) => DropdownMenuItem<String?>(
+                            value: v,
+                            child: Text(v, overflow: TextOverflow.ellipsis)))
+                      ],
+                      onChanged: (v) => go(q.copyWith(role: v)))),
+              SizedBox(
+                  width: 115,
+                  child: TextFormField(
+                      initialValue: q.yearsFrom?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'В группе от',
+                          border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          go(q.copyWith(yearsFrom: int.tryParse(v))))),
+              SizedBox(
+                  width: 115,
+                  child: TextFormField(
+                      initialValue: q.yearsTo?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'В группе до',
+                          border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          go(q.copyWith(yearsTo: int.tryParse(v))))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Switch(
+                    value: q.includeDeleted,
+                    onChanged: (v) => go(q.copyWith(includeDeleted: v))),
+                const Text('Удалённые')
+              ]),
+              TextButton(
+                  onPressed: q.hasActiveFilters
+                      ? () => go(BandMemberQuery(
+                          size: q.size,
+                          sortField: q.sortField,
+                          sortAscending: q.sortAscending))
+                      : null,
+                  child: const Text('Сбросить'))
+            ])));
+  }
+
+  Widget selection(BandMemberListNotifier n) {
+    if (!canEditCollection(context, 'members')) return const SizedBox.shrink();
+    final erase = canEraseCollection(context);
     return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(
-              width: 280,
-              child: TextFormField(
-                  initialValue: q.search,
-                  decoration: const InputDecoration(
-                      labelText: 'Поиск: фамилия или роль',
-                      border: OutlineInputBorder()),
-                  onChanged: (v) {
-                    timer?.cancel();
-                    timer = Timer(const Duration(milliseconds: 350),
-                        () => go(q.copyWith(search: v)));
-                  })),
-          SizedBox(
-              width: 270,
-              child: DropdownButtonFormField<String?>(
-                  // value: q.role,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Роль', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Все роли',
-                            overflow: TextOverflow.ellipsis)),
-                    ...bandRoles.map((v) => DropdownMenuItem<String?>(
-                        value: v,
-                        child: Text(v, overflow: TextOverflow.ellipsis)))
-                  ],
-                  onChanged: (v) => go(q.copyWith(role: v)))),
-          SizedBox(
-              width: 115,
-              child: TextFormField(
-                  initialValue: q.yearsFrom?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'В группе от', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      go(q.copyWith(yearsFrom: int.tryParse(v))))),
-          SizedBox(
-              width: 115,
-              child: TextFormField(
-                  initialValue: q.yearsTo?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'В группе до', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      go(q.copyWith(yearsTo: int.tryParse(v))))),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-                value: q.includeDeleted,
-                onChanged: (v) => go(q.copyWith(includeDeleted: v))),
-            const Text('Удалённые')
-          ]),
-          TextButton(
-              onPressed: q.hasActiveFilters
-                  ? () => go(BandMemberQuery(
-                      size: q.size,
-                      sortField: q.sortField,
-                      sortAscending: q.sortAscending))
-                  : null,
-              child: const Text('Сбросить'))
+        padding: const EdgeInsets.all(8),
+        child: Wrap(spacing: 8, children: [
+          Text('Выбрано: ${n.selected.length}'),
+          FilledButton(
+              onPressed: () async {
+                if (await confirm(context, 'Удалить выбранных?')) {
+                  await _run(() => n.deleteSelected(false));
+                }
+              },
+              child: const Text('Удалить')),
+          if (erase)
+            OutlinedButton(
+                onPressed: () async {
+                  if (await confirm(context, 'Стереть выбранных?',
+                      hard: true)) {
+                    await _run(() => n.deleteSelected(true));
+                  }
+                },
+                child: const Text('Стереть навсегда')),
+          TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
         ]));
   }
 
-  Widget selection(BandMemberListNotifier n) => Padding(
-      padding: const EdgeInsets.all(8),
-      child: Wrap(spacing: 8, children: [
-        Text('Выбрано: ${n.selected.length}'),
-        FilledButton(
-            onPressed: () async {
-              if (await confirm(context, 'Удалить выбранных?')) {
-                await _run(() => n.deleteSelected(false));
-              }
-            },
-            child: const Text('Удалить')),
-        OutlinedButton(
-            onPressed: () async {
-              if (await confirm(context, 'Стереть выбранных?', hard: true)) {
-                await _run(() => n.deleteSelected(true));
-              }
-            },
-            child: const Text('Стереть навсегда')),
-        TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
-      ]));
   Widget body(BandMemberListNotifier n) {
     if (n.status == LoadStatus.idle || n.status == LoadStatus.loading) {
       return const Center(child: CircularProgressIndicator());
@@ -206,38 +221,46 @@ class _BandMemberListScreenState extends State<BandMemberListScreen> {
   }
 
   Widget card(BandMemberListNotifier n, BandMember p) => Card(
-      child: ListTile(
+      child: ResponsiveRecordTile(
           leading: Checkbox(
               value: n.selected.contains(p.id),
               onChanged: (_) => n.toggle(p.id)),
           title: Text(p.fullName),
-          subtitle: Text(
-              '${p.role}\nГоды в группе: ${p.yearsInBand}'),
+          subtitle: Text('${p.role}\nГоды в группе: ${p.yearsInBand}'),
           isThreeLine: true,
           trailing: Wrap(children: actions(n, p))));
-  List<Widget> actions(BandMemberListNotifier n, BandMember p) => [
-        IconButton(
-            tooltip: 'Карточка',
-            onPressed: () => context.go('/members/${p.id}'),
-            icon: const Icon(Icons.visibility_outlined)),
+  List<Widget> actions(BandMemberListNotifier n, BandMember p) {
+    final edit = canEditCollection(context, 'members');
+    final restore = canRestoreCollection(context);
+    final erase = canEraseCollection(context);
+    return [
+      IconButton(
+          tooltip: 'Карточка',
+          onPressed: () => context.go('/members/${p.id}'),
+          icon: const Icon(Icons.visibility_outlined)),
+      if (edit)
         IconButton(
             tooltip: 'Редактировать',
             onPressed: () => context.go('/members/${p.id}/edit'),
             icon: const Icon(Icons.edit_outlined)),
-        if (p.isDeleted)
-          IconButton(
-              onPressed: () => _run(() => n.restore(p.id)),
-              icon: const Icon(Icons.restore))
-        else
-          IconButton(
-              onPressed: () async {
-                if (await confirm(
-                    context, 'Удалить участника «${p.fullName}»?')) {
-                  await _run(() => n.softDelete(p.id));
-                }
-              },
-              icon: const Icon(Icons.delete_outline)),
+      if (p.isDeleted && restore)
         IconButton(
+            tooltip: 'Восстановить',
+            onPressed: () => _run(() => n.restore(p.id)),
+            icon: const Icon(Icons.restore))
+      else if (!p.isDeleted && edit)
+        IconButton(
+            tooltip: 'Удалить',
+            onPressed: () async {
+              if (await confirm(
+                  context, 'Удалить участника «${p.fullName}»?')) {
+                await _run(() => n.softDelete(p.id));
+              }
+            },
+            icon: const Icon(Icons.delete_outline)),
+      if (erase)
+        IconButton(
+            tooltip: 'Стереть навсегда',
             onPressed: () async {
               if (await confirm(context, 'Стереть участника «${p.fullName}»?',
                   hard: true)) {
@@ -245,7 +268,8 @@ class _BandMemberListScreenState extends State<BandMemberListScreen> {
               }
             },
             icon: const Icon(Icons.delete_forever))
-      ];
+    ];
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {

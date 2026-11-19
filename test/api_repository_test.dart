@@ -74,7 +74,8 @@ void main() {
             'size': 10,
             'total': 1,
           }));
-      final result = await ApiAlbumRepository(_dio(adapter)).find(const AlbumQuery());
+      final result =
+          await ApiAlbumRepository(_dio(adapter)).find(const AlbumQuery());
       expect(result.items, hasLength(1));
       expect(result.total, 1);
       expect(result.items.first.title, 'Meliora');
@@ -111,10 +112,13 @@ void main() {
       expect(query['includeDeleted'], 'true');
     });
 
-    test('ответ 422 становится ValidationException с полем каталожного номера', () async {
+    test('ответ 422 становится ValidationException с полем каталожного номера',
+        () async {
       final adapter = _StubAdapter((_) async => _body(422, {
             'message': 'Ошибка валидации',
-            'errors': {'catalogCode': 'Альбом с таким каталожным номером уже есть'},
+            'errors': {
+              'catalogCode': 'Альбом с таким каталожным номером уже есть'
+            },
           }));
       expect(
         () => ApiAlbumRepository(_dio(adapter)).save(_draft()),
@@ -128,7 +132,8 @@ void main() {
 
     test('ответ 409 становится ConflictException', () async {
       final adapter = _StubAdapter((_) async => _body(409, {
-            'message': 'Нельзя удалить альбом: связанных треков — 3, мерча — 2, концертов — 1',
+            'message':
+                'Нельзя удалить альбом: связанных треков — 3, мерча — 2, концертов — 1',
           }));
       expect(
         () => ApiAlbumRepository(_dio(adapter)).softDelete(3),
@@ -140,7 +145,9 @@ void main() {
       );
     });
 
-    test('недоступный сервер становится NetworkException и чтение повторяется трижды', () async {
+    test(
+        'недоступный сервер становится NetworkException и чтение повторяется трижды',
+        () async {
       final adapter = _StubAdapter((options) async {
         throw DioException(
           requestOptions: options,
@@ -163,7 +170,8 @@ void main() {
         );
       });
       final repository = ApiAlbumRepository(_dio(adapter));
-      await expectLater(repository.save(_draft()), throwsA(isA<NetworkException>()));
+      await expectLater(
+          repository.save(_draft()), throwsA(isA<NetworkException>()));
       expect(adapter.requests, hasLength(1));
     });
   });

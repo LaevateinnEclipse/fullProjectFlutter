@@ -33,7 +33,8 @@ class InMemoryAlbumRepository extends InMemoryRepository<Album>
       : item.copyWith(deletedAt: deletedAt);
 
   @override
-  Future<PageResult<Album>> find(AlbumQuery query, {CancelToken? cancelToken}) async {
+  Future<PageResult<Album>> find(AlbumQuery query,
+      {CancelToken? cancelToken}) async {
     if (query.yearFrom != null &&
         query.yearTo != null &&
         query.yearFrom! > query.yearTo!) {
@@ -80,7 +81,9 @@ class InMemoryAlbumRepository extends InMemoryRepository<Album>
     await saveGuard?.call(album);
     final code = album.catalogCode.trim().toUpperCase();
     final duplicate = items.any((x) =>
-        x.id != album.id && x.catalogCode.toUpperCase() == code && !x.isDeleted);
+        x.id != album.id &&
+        x.catalogCode.toUpperCase() == code &&
+        !x.isDeleted);
     if (duplicate) {
       throw const FieldValidationException(
           'catalogCode', 'Альбом с таким каталожным номером уже есть');
@@ -102,7 +105,11 @@ class InMemoryAlbumRepository extends InMemoryRepository<Album>
             trackIds: album.trackIds,
             concertIds: album.concertIds,
           )
-        : album.copyWith(title: album.title.trim(), catalogCode: code, label: album.label.trim(), coverUrl: album.coverUrl.trim());
+        : album.copyWith(
+            title: album.title.trim(),
+            catalogCode: code,
+            label: album.label.trim(),
+            coverUrl: album.coverUrl.trim());
     put(saved);
     await persist();
     return saved;

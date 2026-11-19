@@ -33,7 +33,9 @@ class InMemoryTrackRepository extends InMemoryRepository<Track>
       : item.copyWith(deletedAt: deletedAt);
 
   @override
-  Future<PageResult<Track>> find(TrackQuery query, {CancelToken? cancelToken}) async => page(
+  Future<PageResult<Track>> find(TrackQuery query,
+          {CancelToken? cancelToken}) async =>
+      page(
         pageNumber: query.page,
         pageSize: query.size,
         filter: (rows) {
@@ -54,7 +56,8 @@ class InMemoryTrackRepository extends InMemoryRepository<Track>
           list.sort((a, b) {
             final compared = switch (query.sortField) {
               'trackNumber' => a.trackNumber.compareTo(b.trackNumber),
-              'durationSeconds' => a.durationSeconds.compareTo(b.durationSeconds),
+              'durationSeconds' =>
+                a.durationSeconds.compareTo(b.durationSeconds),
               'genre' => a.genre.compareTo(b.genre),
               _ => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
             };
@@ -73,8 +76,8 @@ class InMemoryTrackRepository extends InMemoryRepository<Track>
         x.albumId == track.albumId &&
         x.trackNumber == track.trackNumber);
     if (duplicate) {
-      throw const FieldValidationException('trackNumber',
-          'В этом альбоме уже есть трек с таким номером');
+      throw const FieldValidationException(
+          'trackNumber', 'В этом альбоме уже есть трек с таким номером');
     }
     final saved = track.id == 0
         ? Track(

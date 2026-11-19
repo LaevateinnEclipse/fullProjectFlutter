@@ -4,21 +4,8 @@ import '../models/concert.dart';
 import '../models/merch_item.dart';
 import '../models/track.dart';
 
-const merchCategories = [
-  'Одежда',
-  'Винил',
-  'CD',
-  'Постеры',
-  'Аксессуары'
-];
-const bandRoles = [
-  'Вокал',
-  'Гитара',
-  'Бас',
-  'Ударные',
-  'Клавиши',
-  'Бэк-вокал'
-];
+const merchCategories = ['Одежда', 'Винил', 'CD', 'Постеры', 'Аксессуары'];
+const bandRoles = ['Вокал', 'Гитара', 'Бас', 'Ударные', 'Клавиши', 'Бэк-вокал'];
 const trackGenres = [
   'Heavy metal',
   'Hard rock',

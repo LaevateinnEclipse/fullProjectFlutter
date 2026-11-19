@@ -18,7 +18,8 @@ void main() {
     final member = BandMember.fromJson({'id': 1});
     expect(member.albumIds, isEmpty);
     expect(member.email, '');
-    final concert = Concert.fromJson({'id': 2, 'date': null, 'memberIds': null});
+    final concert =
+        Concert.fromJson({'id': 2, 'date': null, 'memberIds': null});
     expect(concert.memberIds, isEmpty);
     expect(concert.status, 'plan');
   });

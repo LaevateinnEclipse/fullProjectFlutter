@@ -9,6 +9,8 @@ import '../state/catalog_notifier.dart';
 import '../state/list_notifiers.dart';
 import '../widgets/common.dart';
 import '../widgets/entity_table.dart';
+import '../widgets/record_actions.dart';
+import '../widgets/responsive.dart';
 
 class AlbumListScreen extends StatefulWidget {
   final AlbumQuery query;
@@ -37,7 +39,9 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
   void sync() => context.read<AlbumListNotifier>().applyQuery(widget.query);
   void go(AlbumQuery q) {
     final p = q.toQueryParameters();
-    context.go(p.isEmpty ? '/albums' : Uri(path: '/albums', queryParameters: p).toString());
+    context.go(p.isEmpty
+        ? '/albums'
+        : Uri(path: '/albums', queryParameters: p).toString());
   }
 
   @override
@@ -51,16 +55,19 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
     final n = c.watch<AlbumListNotifier>();
     return AppScaffold(
         title: 'Дискография',
-        index: 2,
+        index: 3,
+        onRefresh: n.load,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: () => context.go('/albums/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Новый альбом')))),
+          const ReadOnlyNotice(collection: 'albums'),
+          if (canEditCollection(context, 'albums'))
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                        onPressed: () => context.go('/albums/new'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый альбом')))),
           filters(n),
           if (n.hasSelection) selection(n),
           Expanded(child: body(n)),
@@ -77,91 +84,97 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
 
   Widget filters(AlbumListNotifier n) {
     final q = widget.query;
-    return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(
-              width: 280,
-              child: TextFormField(
-                  initialValue: q.search,
-                  decoration: const InputDecoration(
-                      labelText: 'Поиск: название, код или лейбл',
-                      border: OutlineInputBorder()),
-                  onChanged: (v) {
-                    timer?.cancel();
-                    timer = Timer(const Duration(milliseconds: 350),
-                        () => go(q.copyWith(search: v)));
-                  })),
-          SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<String?>(
-                  initialValue: q.albumType,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Тип', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Все типы')),
-                    ...Album.types.map((v) => DropdownMenuItem<String?>(
-                        value: v, child: Text(albumTypeLabel(v))))
-                  ],
-                  onChanged: (v) => go(q.copyWith(albumType: v)))),
-          SizedBox(
-              width: 110,
-              child: TextFormField(
-                  initialValue: q.yearFrom?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Год от', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      go(q.copyWith(yearFrom: int.tryParse(v))))),
-          SizedBox(
-              width: 110,
-              child: TextFormField(
-                  initialValue: q.yearTo?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Год до', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      go(q.copyWith(yearTo: int.tryParse(v))))),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-                value: q.includeDeleted,
-                onChanged: (v) => go(q.copyWith(includeDeleted: v))),
-            const Text('Удалённые')
-          ]),
-          TextButton(
-              onPressed: q.hasActiveFilters
-                  ? () => go(AlbumQuery(
-                      size: q.size,
-                      sortField: q.sortField,
-                      sortAscending: q.sortAscending))
-                  : null,
-              child: const Text('Сбросить'))
-        ]));
+    return AdaptiveFilters(
+        child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              SizedBox(
+                  width: 280,
+                  child: TextFormField(
+                      initialValue: q.search,
+                      decoration: const InputDecoration(
+                          labelText: 'Поиск: название, код или лейбл',
+                          border: OutlineInputBorder()),
+                      onChanged: (v) {
+                        timer?.cancel();
+                        timer = Timer(const Duration(milliseconds: 350),
+                            () => go(q.copyWith(search: v)));
+                      })),
+              SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<String?>(
+                      initialValue: q.albumType,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Тип', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Все типы')),
+                        ...Album.types.map((v) => DropdownMenuItem<String?>(
+                            value: v, child: Text(albumTypeLabel(v))))
+                      ],
+                      onChanged: (v) => go(q.copyWith(albumType: v)))),
+              SizedBox(
+                  width: 110,
+                  child: TextFormField(
+                      initialValue: q.yearFrom?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Год от', border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          go(q.copyWith(yearFrom: int.tryParse(v))))),
+              SizedBox(
+                  width: 110,
+                  child: TextFormField(
+                      initialValue: q.yearTo?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Год до', border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          go(q.copyWith(yearTo: int.tryParse(v))))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Switch(
+                    value: q.includeDeleted,
+                    onChanged: (v) => go(q.copyWith(includeDeleted: v))),
+                const Text('Удалённые')
+              ]),
+              TextButton(
+                  onPressed: q.hasActiveFilters
+                      ? () => go(AlbumQuery(
+                          size: q.size,
+                          sortField: q.sortField,
+                          sortAscending: q.sortAscending))
+                      : null,
+                  child: const Text('Сбросить'))
+            ])));
   }
 
-  Widget selection(AlbumListNotifier n) => Padding(
-      padding: const EdgeInsets.all(8),
-      child: Wrap(spacing: 8, children: [
-        Text('Выбрано: ${n.selected.length}'),
-        FilledButton(
-            onPressed: () async {
-              if (await confirm(context, 'Удалить выбранные альбомы?')) {
-                await _run(() => n.deleteSelected(false));
-              }
-            },
-            child: const Text('Удалить')),
-        OutlinedButton(
-            onPressed: () async {
-              if (await confirm(context, 'Стереть выбранные альбомы?',
-                  hard: true)) {
-                await _run(() => n.deleteSelected(true));
-              }
-            },
-            child: const Text('Стереть навсегда')),
-        TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
-      ]));
+  Widget selection(AlbumListNotifier n) {
+    if (!canEditCollection(context, 'albums')) return const SizedBox.shrink();
+    final erase = canEraseCollection(context);
+    return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Wrap(spacing: 8, children: [
+          Text('Выбрано: ${n.selected.length}'),
+          FilledButton(
+              onPressed: () async {
+                if (await confirm(context, 'Удалить выбранные альбомы?')) {
+                  await _run(() => n.deleteSelected(false));
+                }
+              },
+              child: const Text('Удалить')),
+          if (erase)
+            OutlinedButton(
+                onPressed: () async {
+                  if (await confirm(context, 'Стереть выбранные альбомы?',
+                      hard: true)) {
+                    await _run(() => n.deleteSelected(true));
+                  }
+                },
+                child: const Text('Стереть навсегда')),
+          TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
+        ]));
+  }
 
   Widget body(AlbumListNotifier n) {
     if (n.status == LoadStatus.idle || n.status == LoadStatus.loading) {
@@ -185,7 +198,8 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
         asc: n.query.sortAscending,
         onSort: (f) => go(n.query.copyWith(
             sortField: f,
-            sortAscending: f == n.query.sortField ? !n.query.sortAscending : true)),
+            sortAscending:
+                f == n.query.sortField ? !n.query.sortAscending : true)),
         columns: [
           (
             'Название',
@@ -201,37 +215,47 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
   }
 
   Widget card(AlbumListNotifier n, Album a) => Card(
-      child: ListTile(
+      child: ResponsiveRecordTile(
           leading: Checkbox(
-              value: n.selected.contains(a.id), onChanged: (_) => n.toggle(a.id)),
+              value: n.selected.contains(a.id),
+              onChanged: (_) => n.toggle(a.id)),
           title: Text(a.title),
           subtitle: Text(
               '${a.catalogCode} • ${albumTypeLabel(a.albumType)}\n${a.year}, ${a.label}'),
           isThreeLine: true,
           trailing: Wrap(children: actions(n, a))));
 
-  List<Widget> actions(AlbumListNotifier n, Album a) => [
-        IconButton(
-            tooltip: 'Карточка',
-            onPressed: () => context.go('/albums/${a.id}'),
-            icon: const Icon(Icons.visibility_outlined)),
+  List<Widget> actions(AlbumListNotifier n, Album a) {
+    final edit = canEditCollection(context, 'albums');
+    final restore = canRestoreCollection(context);
+    final erase = canEraseCollection(context);
+    return [
+      IconButton(
+          tooltip: 'Карточка',
+          onPressed: () => context.go('/albums/${a.id}'),
+          icon: const Icon(Icons.visibility_outlined)),
+      if (edit)
         IconButton(
             tooltip: 'Редактировать',
             onPressed: () => context.go('/albums/${a.id}/edit'),
             icon: const Icon(Icons.edit_outlined)),
-        if (a.isDeleted)
-          IconButton(
-              onPressed: () => _run(() => n.restore(a.id)),
-              icon: const Icon(Icons.restore))
-        else
-          IconButton(
-              onPressed: () async {
-                if (await confirm(context, 'Удалить альбом «${a.title}»?')) {
-                  await _run(() => n.softDelete(a.id));
-                }
-              },
-              icon: const Icon(Icons.delete_outline)),
+      if (a.isDeleted && restore)
         IconButton(
+            tooltip: 'Восстановить',
+            onPressed: () => _run(() => n.restore(a.id)),
+            icon: const Icon(Icons.restore))
+      else if (!a.isDeleted && edit)
+        IconButton(
+            tooltip: 'Удалить',
+            onPressed: () async {
+              if (await confirm(context, 'Удалить альбом «${a.title}»?')) {
+                await _run(() => n.softDelete(a.id));
+              }
+            },
+            icon: const Icon(Icons.delete_outline)),
+      if (erase)
+        IconButton(
+            tooltip: 'Стереть навсегда',
             onPressed: () async {
               if (await confirm(context, 'Стереть альбом «${a.title}»?',
                   hard: true)) {
@@ -239,7 +263,8 @@ class _AlbumListScreenState extends State<AlbumListScreen> {
               }
             },
             icon: const Icon(Icons.delete_forever))
-      ];
+    ];
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {

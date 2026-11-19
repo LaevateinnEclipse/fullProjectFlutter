@@ -1,0 +1,6 @@
+.git
+build
+.dart_tool
+server/.local-state.json
+android/.gradle
+**/*.md

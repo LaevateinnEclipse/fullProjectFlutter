@@ -9,6 +9,8 @@ import '../state/catalog_notifier.dart';
 import '../state/list_notifiers.dart';
 import '../widgets/common.dart';
 import '../widgets/entity_table.dart';
+import '../widgets/record_actions.dart';
+import '../widgets/responsive.dart';
 
 class MerchListScreen extends StatefulWidget {
   final MerchQuery query;
@@ -53,16 +55,19 @@ class _MerchListScreenState extends State<MerchListScreen> {
     final n = context.watch<MerchListNotifier>();
     return AppScaffold(
         title: 'Мерч группы',
-        index: 0,
+        index: 1,
+        onRefresh: n.load,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: () => context.go('/merch/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Новый товар')))),
+          const ReadOnlyNotice(collection: 'merch'),
+          if (canEditCollection(context, 'merch'))
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                        onPressed: () => context.go('/merch/new'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый товар')))),
           _filters(n),
           if (n.hasSelection) _selection(n),
           Expanded(child: _body(n)),
@@ -79,108 +84,117 @@ class _MerchListScreenState extends State<MerchListScreen> {
 
   Widget _filters(MerchListNotifier n) {
     final q = widget.query;
+    return AdaptiveFilters(
+        child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              SizedBox(
+                  width: 260,
+                  child: TextFormField(
+                      initialValue: q.search,
+                      decoration: const InputDecoration(
+                          labelText: 'Поиск: товар или артикул',
+                          border: OutlineInputBorder()),
+                      onChanged: (v) {
+                        _timer?.cancel();
+                        _timer = Timer(const Duration(milliseconds: 350),
+                            () => _go(q.copyWith(search: v)));
+                      })),
+              SizedBox(
+                  width: 180,
+                  child: DropdownButtonFormField<String?>(
+                      // value: q.category,
+                      decoration: const InputDecoration(
+                          labelText: 'Категория', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Все категории')),
+                        ...merchCategories.map((v) =>
+                            DropdownMenuItem<String?>(value: v, child: Text(v)))
+                      ],
+                      onChanged: (v) => _go(q.copyWith(category: v)))),
+              SizedBox(
+                  width: 115,
+                  child: TextFormField(
+                      initialValue: q.stockFrom?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Остаток от',
+                          border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          _go(q.copyWith(stockFrom: int.tryParse(v))))),
+              SizedBox(
+                  width: 115,
+                  child: TextFormField(
+                      initialValue: q.stockTo?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Остаток до',
+                          border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          _go(q.copyWith(stockTo: int.tryParse(v))))),
+              SizedBox(
+                  width: 120,
+                  child: TextFormField(
+                      initialValue: q.priceFrom?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Цена от', border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          _go(q.copyWith(priceFrom: int.tryParse(v))))),
+              SizedBox(
+                  width: 120,
+                  child: TextFormField(
+                      initialValue: q.priceTo?.toString(),
+                      decoration: const InputDecoration(
+                          labelText: 'Цена до', border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                      onFieldSubmitted: (v) =>
+                          _go(q.copyWith(priceTo: int.tryParse(v))))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Switch(
+                    value: q.includeDeleted,
+                    onChanged: (v) => _go(q.copyWith(includeDeleted: v))),
+                const Text('Удалённые')
+              ]),
+              TextButton(
+                  onPressed: q.hasActiveFilters
+                      ? () => _go(MerchQuery(
+                          size: q.size,
+                          sortField: q.sortField,
+                          sortAscending: q.sortAscending))
+                      : null,
+                  child: const Text('Сбросить'))
+            ])));
+  }
+
+  Widget _selection(MerchListNotifier n) {
+    if (!canEditCollection(context, 'merch')) return const SizedBox.shrink();
+    final erase = canEraseCollection(context);
     return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(
-              width: 260,
-              child: TextFormField(
-                  initialValue: q.search,
-                  decoration: const InputDecoration(
-                      labelText: 'Поиск: товар или артикул',
-                      border: OutlineInputBorder()),
-                  onChanged: (v) {
-                    _timer?.cancel();
-                    _timer = Timer(const Duration(milliseconds: 350),
-                        () => _go(q.copyWith(search: v)));
-                  })),
-          SizedBox(
-              width: 180,
-              child: DropdownButtonFormField<String?>(
-                  // value: q.category,
-                  decoration: const InputDecoration(
-                      labelText: 'Категория', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Все категории')),
-                    ...merchCategories.map((v) =>
-                        DropdownMenuItem<String?>(value: v, child: Text(v)))
-                  ],
-                  onChanged: (v) => _go(q.copyWith(category: v)))),
-          SizedBox(
-              width: 115,
-              child: TextFormField(
-                  initialValue: q.stockFrom?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Остаток от', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      _go(q.copyWith(stockFrom: int.tryParse(v))))),
-          SizedBox(
-              width: 115,
-              child: TextFormField(
-                  initialValue: q.stockTo?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Остаток до', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      _go(q.copyWith(stockTo: int.tryParse(v))))),
-          SizedBox(
-              width: 120,
-              child: TextFormField(
-                  initialValue: q.priceFrom?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Цена от', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      _go(q.copyWith(priceFrom: int.tryParse(v))))),
-          SizedBox(
-              width: 120,
-              child: TextFormField(
-                  initialValue: q.priceTo?.toString(),
-                  decoration: const InputDecoration(
-                      labelText: 'Цена до', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  onFieldSubmitted: (v) =>
-                      _go(q.copyWith(priceTo: int.tryParse(v))))),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-                value: q.includeDeleted,
-                onChanged: (v) => _go(q.copyWith(includeDeleted: v))),
-            const Text('Удалённые')
-          ]),
-          TextButton(
-              onPressed: q.hasActiveFilters
-                  ? () => _go(MerchQuery(
-                      size: q.size,
-                      sortField: q.sortField,
-                      sortAscending: q.sortAscending))
-                  : null,
-              child: const Text('Сбросить'))
+        padding: const EdgeInsets.all(8),
+        child: Wrap(spacing: 8, children: [
+          Text('Выбрано: ${n.selected.length}'),
+          FilledButton(
+              onPressed: () async {
+                if (await confirm(context, 'Удалить выбранные товары?')) {
+                  await _run(() => n.deleteSelected(false));
+                }
+              },
+              child: const Text('Удалить')),
+          if (erase)
+            OutlinedButton(
+                onPressed: () async {
+                  if (await confirm(context, 'Стереть выбранные товары?',
+                      hard: true)) {
+                    await _run(() => n.deleteSelected(true));
+                  }
+                },
+                child: const Text('Стереть навсегда')),
+          TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
         ]));
   }
 
-  Widget _selection(MerchListNotifier n) => Padding(
-      padding: const EdgeInsets.all(8),
-      child: Wrap(spacing: 8, children: [
-        Text('Выбрано: ${n.selected.length}'),
-        FilledButton(
-            onPressed: () async {
-              if (await confirm(context, 'Удалить выбранные товары?')) {
-                await _run(() => n.deleteSelected(false));
-              }
-            },
-            child: const Text('Удалить')),
-        OutlinedButton(
-            onPressed: () async {
-              if (await confirm(context, 'Стереть выбранные товары?',
-                  hard: true)) {
-                await _run(() => n.deleteSelected(true));
-              }
-            },
-            child: const Text('Стереть навсегда')),
-        TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
-      ]));
   Widget _body(MerchListNotifier n) {
     if (n.status == LoadStatus.idle || n.status == LoadStatus.loading) {
       return const Center(child: CircularProgressIndicator());
@@ -220,37 +234,46 @@ class _MerchListScreenState extends State<MerchListScreen> {
   }
 
   Widget _card(MerchListNotifier n, MerchItem m) => Card(
-      child: ListTile(
+      child: ResponsiveRecordTile(
           leading: Checkbox(
               value: n.selected.contains(m.id),
               onChanged: (_) => n.toggle(m.id)),
           title: Text(m.name),
-          subtitle: Text(
-              '${m.sku} • ${m.category}\n${m.stock} шт. • ${m.price} ₽'),
+          subtitle:
+              Text('${m.sku} • ${m.category}\n${m.stock} шт. • ${m.price} ₽'),
           isThreeLine: true,
           trailing: Wrap(children: _actions(n, m))));
-  List<Widget> _actions(MerchListNotifier n, MerchItem m) => [
-        IconButton(
-            tooltip: 'Карточка',
-            onPressed: () => context.go('/merch/${m.id}'),
-            icon: const Icon(Icons.visibility_outlined)),
+  List<Widget> _actions(MerchListNotifier n, MerchItem m) {
+    final edit = canEditCollection(context, 'merch');
+    final restore = canRestoreCollection(context);
+    final erase = canEraseCollection(context);
+    return [
+      IconButton(
+          tooltip: 'Карточка',
+          onPressed: () => context.go('/merch/${m.id}'),
+          icon: const Icon(Icons.visibility_outlined)),
+      if (edit)
         IconButton(
             tooltip: 'Редактировать',
             onPressed: () => context.go('/merch/${m.id}/edit'),
             icon: const Icon(Icons.edit_outlined)),
-        if (m.isDeleted)
-          IconButton(
-              onPressed: () => _run(() => n.restore(m.id)),
-              icon: const Icon(Icons.restore))
-        else
-          IconButton(
-              onPressed: () async {
-                if (await confirm(context, 'Удалить товар «${m.name}»?')) {
-                  await _run(() => n.softDelete(m.id));
-                }
-              },
-              icon: const Icon(Icons.delete_outline)),
+      if (m.isDeleted && restore)
         IconButton(
+            tooltip: 'Восстановить',
+            onPressed: () => _run(() => n.restore(m.id)),
+            icon: const Icon(Icons.restore))
+      else if (!m.isDeleted && edit)
+        IconButton(
+            tooltip: 'Удалить',
+            onPressed: () async {
+              if (await confirm(context, 'Удалить товар «${m.name}»?')) {
+                await _run(() => n.softDelete(m.id));
+              }
+            },
+            icon: const Icon(Icons.delete_outline)),
+      if (erase)
+        IconButton(
+            tooltip: 'Стереть навсегда',
             onPressed: () async {
               if (await confirm(context, 'Стереть товар «${m.name}»?',
                   hard: true)) {
@@ -258,7 +281,8 @@ class _MerchListScreenState extends State<MerchListScreen> {
               }
             },
             icon: const Icon(Icons.delete_forever))
-      ];
+    ];
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {

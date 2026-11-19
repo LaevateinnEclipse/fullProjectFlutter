@@ -26,8 +26,8 @@ class GhostRepositories {
               ids.contains(track.albumId) && (hard || !track.isDeleted))
           .length;
       final merchCount = merch.items
-          .where((item) =>
-              ids.contains(item.albumId) && (hard || !item.isDeleted))
+          .where(
+              (item) => ids.contains(item.albumId) && (hard || !item.isDeleted))
           .length;
       final concertCount = concerts.items
           .where((concert) =>
@@ -67,8 +67,8 @@ class GhostRepositories {
             member.isDeleted ||
             (member.albumIds.isNotEmpty &&
                 !member.albumIds.contains(album.id))) {
-          throw const FieldValidationException('memberIds',
-              'Участник не записан на выбранном альбоме');
+          throw const FieldValidationException(
+              'memberIds', 'Участник не записан на выбранном альбоме');
         }
       }
     };

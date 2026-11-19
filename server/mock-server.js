@@ -1,4 +1,5 @@
 const http = require('node:http');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const nodePath = require('node:path');
 const seed = require('./seed-ghost');
@@ -10,9 +11,14 @@ function arg(name, fallback) {
   return args[index + 1];
 }
 
-const PORT = Number(arg('port', 8080));
-const ORIGIN = arg('origin', 'http://localhost:5555');
+const PORT = Number(arg('port', process.env.PORT || 8080));
+const ORIGIN = arg('origin', process.env.CORS_ORIGIN || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5555');
+const SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
+const ACCESS_TTL = Number(arg('ttl', 900));
+const REFRESH_TTL = 60 * 60 * 24 * 7;
+const SESSION_TTL = Number(arg('session-ttl', 1800));
 const COLLECTIONS = ['albums', 'members', 'tracks', 'merch', 'concerts'];
+const ROLE_LEVEL = { fan: 1, ghoul: 2, manager: 3, admin: 4 };
 const ALBUM_TYPES = ['studio', 'live', 'EP', 'single'];
 const CONCERT_STATUSES = ['plan', 'done', 'cancelled'];
 
@@ -25,8 +31,117 @@ function fresh() {
     tracks: seed.tracks.map((row) => ({ ...row })),
     merch: seed.merch.map((row) => ({ ...row, sizeIds: [...row.sizeIds] })),
     concerts: seed.concerts.map((row) => ({ ...row, memberIds: [...row.memberIds] })),
+    users: [],
+    refreshTokens: [],
+    revokedSessions: [],
   };
   for (const album of db.albums) delete album.albumIds;
+  ensureAuth();
+}
+
+function b64url(value) {
+  return Buffer.from(value).toString('base64url');
+}
+
+function sign(payload) {
+  const body = b64url(JSON.stringify({ ...payload, jti: crypto.randomUUID() }));
+  const mac = crypto.createHmac('sha256', SECRET).update(body).digest('base64url');
+  return `${body}.${mac}`;
+}
+
+function verify(token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const [body, mac] = token.split('.');
+  const expected = crypto.createHmac('sha256', SECRET).update(body).digest('base64url');
+  if (mac !== expected) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function hash(password) {
+  return crypto.createHash('sha256').update(password + SECRET).digest('hex');
+}
+
+function expandUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+  };
+}
+
+function ensureAuth() {
+  if (!Array.isArray(db.users)) db.users = [];
+  if (!Array.isArray(db.refreshTokens)) db.refreshTokens = [];
+  if (!Array.isArray(db.revokedSessions)) db.revokedSessions = [];
+  if (db.users.length === 0) {
+    const accounts = [
+      ['admin', 'admin123', 'Кардинал Копиа', 'admin@ghost.band', 'admin'],
+      ['manager', 'manager123', 'Менеджер тура', 'manager@ghost.band', 'manager'],
+      ['ghoul', 'ghoul123', 'Nameless Ghoul', 'ghoul@ghost.band', 'ghoul'],
+      ['fan', 'fan123', 'Фанат конгрегации', 'fan@ghost.band', 'fan'],
+    ];
+    accounts.forEach(([username, password, fullName, email, role], index) => {
+      db.users.push({
+        id: index + 1,
+        username,
+        passwordHash: hash(password),
+        fullName,
+        email,
+        role,
+        deletedAt: null,
+      });
+    });
+  }
+  const fan = db.users.find((user) => user.username === 'fan' && !user.deletedAt);
+  const warsaw = db.concerts.find((concert) => concert.id === 12);
+  if (fan && warsaw && !warsaw.ownerUserId) {
+    warsaw.deskEmail = warsaw.deskEmail || warsaw.contactEmail;
+    warsaw.ownerUserId = fan.id;
+    warsaw.contactEmail = fan.email;
+  }
+}
+
+function currentUser(req) {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  const payload = verify(header.slice(7));
+  if (!payload || payload.type !== 'access') return null;
+  if (db.revokedSessions.includes(payload.sid)) return null;
+  if (payload.startedAt && Math.floor(Date.now() / 1000) - payload.startedAt >= SESSION_TTL) return null;
+  return db.users.find((user) => user.id === payload.sub && !user.deletedAt) || null;
+}
+
+function requireRole(res, user, minRole) {
+  if (!user) {
+    fail(res, 401, 'Требуется аутентификация');
+    return false;
+  }
+  if (ROLE_LEVEL[user.role] < ROLE_LEVEL[minRole]) {
+    fail(res, 403, `Операция доступна начиная с роли «${minRole}»`);
+    return false;
+  }
+  return true;
+}
+
+function requireEntityWrite(res, user, collection, hard = false) {
+  if (!user) {
+    fail(res, 401, 'Требуется вход в систему');
+    return false;
+  }
+  if (user.role === 'admin') return true;
+  if (!hard && user.role === 'manager' && collection === 'concerts') return true;
+  fail(res, 403, hard
+    ? 'Физическое удаление доступно только администратору'
+    : 'Изменение этого раздела доступно только администратору');
+  return false;
 }
 
 function str(value) {
@@ -442,6 +557,7 @@ async function handle(req, res, url) {
   const query = Object.fromEntries(url.searchParams.entries());
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const method = req.method.toUpperCase();
+  const user = currentUser(req);
 
   if (query.__fail) {
     return fail(res, Number(query.__fail), 'Ошибка вызвана намеренно параметром __fail');
@@ -452,6 +568,7 @@ async function handle(req, res, url) {
   }
 
   if (path === '/api/__reset' && method === 'POST') {
+    if (!requireRole(res, user, 'admin')) return;
     fresh();
     return send(res, 200, { message: 'Данные восстановлены в исходное состояние' });
   }
@@ -470,15 +587,182 @@ async function handle(req, res, url) {
         'POST /api/:collection/bulk-delete': 'Множественное удаление',
         'POST /api/:collection/:id/restore': 'Восстановление',
         'GET /api/__health': 'Проверка доступности',
-        'POST /api/__reset': 'Сброс к исходным данным',
+        'POST /api/auth/login': 'Вход',
+        'POST /api/auth/register': 'Регистрация фаната',
+        'GET /api/auth/me': 'Текущий пользователь',
+        'POST /api/__reset': 'Сброс к исходным данным, роль admin',
       },
+      accounts: [
+        { username: 'fan', password: 'fan123', role: 'fan' },
+        { username: 'ghoul', password: 'ghoul123', role: 'ghoul' },
+        { username: 'manager', password: 'manager123', role: 'manager' },
+        { username: 'admin', password: 'admin123', role: 'admin' },
+      ],
     });
+  }
+
+  if (path === '/api/auth/register' && method === 'POST') {
+    const body = await readBody(req);
+    if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
+    const errors = {};
+    const username = str(body.username);
+    const password = String(body.password || '');
+    const email = str(body.email);
+    if (username.length < 3) errors.username = 'Логин не короче трёх символов';
+    else if (db.users.find((item) => item.username === username)) errors.username = 'Такой логин уже занят';
+    if (password.length < 8) errors.password = 'Пароль не короче восьми символов';
+    else if (!/\d/.test(password)) errors.password = 'Пароль должен содержать цифру';
+    else if (!/[^\p{L}\p{N}\s]/u.test(password)) errors.password = 'Пароль должен содержать специальный символ';
+    if (!str(body.fullName)) errors.fullName = 'Укажите имя';
+    if (!email) errors.email = 'Укажите почту';
+    else if (!/^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(email)) errors.email = 'Некорректный адрес почты';
+    else if (db.users.some((item) => item.email.toLowerCase() === email.toLowerCase())) errors.email = 'Пользователь с такой почтой уже есть';
+    if (Object.keys(errors).length) return send(res, 422, { message: 'Ошибка валидации', errors });
+    const id = db.users.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    const created = {
+      id,
+      username,
+      passwordHash: hash(password),
+      fullName: str(body.fullName),
+      email,
+      role: 'fan',
+      deletedAt: null,
+    };
+    db.users.push(created);
+    return send(res, 201, expandUser(created));
+  }
+
+  if (path === '/api/auth/login' && method === 'POST') {
+    const body = await readBody(req);
+    if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
+    const found = db.users.find((item) => item.username === str(body.username) && !item.deletedAt);
+    if (!found || found.passwordHash !== hash(String(body.password || ''))) {
+      return fail(res, 401, 'Неверный логин или пароль');
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const sid = crypto.randomUUID();
+    const accessToken = sign({ sub: found.id, role: found.role, type: 'access', sid, startedAt: now, exp: now + ACCESS_TTL });
+    const refreshToken = sign({ sub: found.id, type: 'refresh', sid, startedAt: now, exp: now + REFRESH_TTL });
+    db.refreshTokens.push(refreshToken);
+    return send(res, 200, { accessToken, refreshToken, expiresIn: ACCESS_TTL, user: expandUser(found) });
+  }
+
+  if (path === '/api/auth/refresh' && method === 'POST') {
+    const body = await readBody(req);
+    const token = body && body.refreshToken;
+    const payload = verify(token);
+    if (!payload || payload.type !== 'refresh' || !db.refreshTokens.includes(token) || db.revokedSessions.includes(payload.sid) || (payload.startedAt && Math.floor(Date.now() / 1000) - payload.startedAt >= SESSION_TTL)) {
+      return fail(res, 401, 'Токен обновления недействителен');
+    }
+    const found = db.users.find((item) => item.id === payload.sub && !item.deletedAt);
+    if (!found) return fail(res, 401, 'Пользователь не найден');
+    db.refreshTokens = db.refreshTokens.filter((item) => item !== token);
+    const now = Math.floor(Date.now() / 1000);
+    const accessToken = sign({ sub: found.id, role: found.role, type: 'access', sid: payload.sid, startedAt: payload.startedAt, exp: now + ACCESS_TTL });
+    const refreshToken = sign({ sub: found.id, type: 'refresh', sid: payload.sid, startedAt: payload.startedAt, exp: now + REFRESH_TTL });
+    db.refreshTokens.push(refreshToken);
+    return send(res, 200, { accessToken, refreshToken, expiresIn: ACCESS_TTL, user: expandUser(found) });
+  }
+
+  if (path === '/api/auth/me' && method === 'GET') {
+    if (!user) return fail(res, 401, 'Требуется аутентификация');
+    return send(res, 200, expandUser(user));
+  }
+
+  if (path === '/api/auth/logout' && method === 'POST') {
+    const body = await readBody(req);
+    if (body && body.refreshToken) {
+      const payload = verify(body.refreshToken);
+      if (payload && payload.sid) db.revokedSessions.push(payload.sid);
+      db.refreshTokens = db.refreshTokens.filter((item) => item !== body.refreshToken);
+    }
+    return send(res, 204);
+  }
+
+  if (path === '/api/users' && method === 'GET') {
+    if (!requireRole(res, user, 'admin')) return;
+    const rows = db.users.filter((item) => !item.deletedAt);
+    return send(res, 200, { items: rows.map(expandUser), page: 1, size: rows.length, total: rows.length, totalPages: 1 });
+  }
+
+  if (path === '/api/account/tickets' && method === 'GET') {
+    if (!user) return fail(res, 401, 'Требуется вход');
+    if (user.role !== 'fan') return fail(res, 403, 'Личный кабинет доступен фанату');
+    return send(res, 200, db.concerts.filter((concert) => concert.ownerUserId === user.id && !concert.deletedAt).map(EXPANDERS.concerts));
+  }
+
+  if (path === '/api/manager/workspace' && method === 'GET') {
+    if (!user) return fail(res, 401, 'Требуется вход');
+    if (user.role !== 'manager') return fail(res, 403, 'Рабочее место доступно менеджеру тура');
+    return send(res, 200, {
+      plannedConcerts: db.concerts.filter((concert) => !concert.deletedAt && concert.status === 'plan').length,
+      claimedTickets: db.concerts.filter((concert) => !concert.deletedAt && concert.ownerUserId).length,
+      albums: db.albums.filter((album) => !album.deletedAt).length,
+      members: db.members.filter((member) => !member.deletedAt).length,
+    });
+  }
+
+  if (path === '/api/admin/statistics' && method === 'GET') {
+    if (!requireRole(res, user, 'admin')) return;
+    return send(res, 200, {
+      users: db.users.filter((item) => !item.deletedAt).length,
+      albums: db.albums.filter((item) => !item.deletedAt).length,
+      tracks: db.tracks.filter((item) => !item.deletedAt).length,
+      merch: db.merch.filter((item) => !item.deletedAt).length,
+      members: db.members.filter((item) => !item.deletedAt).length,
+      concerts: db.concerts.filter((item) => !item.deletedAt).length,
+      plannedConcerts: db.concerts.filter((item) => !item.deletedAt && item.status === 'plan').length,
+      claimedTickets: db.concerts.filter((item) => !item.deletedAt && item.ownerUserId).length,
+      deletedRecords: COLLECTIONS.reduce((sum, name) => sum + db[name].filter((item) => item.deletedAt).length, 0),
+    });
+  }
+
+  const roleChange = path.match(/^\/api\/users\/(\d+)\/role$/);
+  if (roleChange && method === 'PATCH') {
+    if (!requireRole(res, user, 'admin')) return;
+    const target = db.users.find((item) => item.id === Number(roleChange[1]) && !item.deletedAt);
+    if (!target) return fail(res, 404, 'Пользователь не найден');
+    const body = await readBody(req);
+    if (!body || !Object.hasOwn(ROLE_LEVEL, body.role)) {
+      return send(res, 422, { message: 'Ошибка валидации', errors: { role: 'Неизвестная роль' } });
+    }
+    if (target.id === user.id && body.role !== 'admin') return fail(res, 409, 'Нельзя понизить собственную роль администратора');
+    target.role = body.role;
+    return send(res, 200, expandUser(target));
+  }
+
+  const claim = path.match(/^\/api\/concerts\/(\d+)\/claim$/);
+  if (claim && method === 'POST') {
+    if (!user) return fail(res, 401, 'Требуется вход');
+    if (user.role !== 'fan') return fail(res, 403, 'Билет может взять только фанат');
+    const row = db.concerts.find((item) => item.id === Number(claim[1]) && !item.deletedAt);
+    if (!row) return fail(res, 404, 'Концерт не найден');
+    if (row.status !== 'plan') return fail(res, 409, 'Билет можно взять только на запланированный концерт');
+    if (row.ownerUserId && row.ownerUserId !== user.id) return fail(res, 409, 'На этот концерт билет уже выдан');
+    if (!row.deskEmail) row.deskEmail = row.contactEmail;
+    row.ownerUserId = user.id;
+    row.contactEmail = user.email;
+    return send(res, 200, EXPANDERS.concerts(row));
+  }
+
+  const release = path.match(/^\/api\/concerts\/(\d+)\/release$/);
+  if (release && method === 'POST') {
+    if (!user) return fail(res, 401, 'Требуется вход');
+    if (user.role !== 'fan') return fail(res, 403, 'Вернуть билет может только фанат');
+    const row = db.concerts.find((item) => item.id === Number(release[1]) && !item.deletedAt);
+    if (!row) return fail(res, 404, 'Концерт не найден');
+    if (row.ownerUserId !== user.id) return fail(res, 403, 'Нельзя вернуть чужой билет');
+    if (row.status !== 'plan') return fail(res, 409, 'Вернуть можно только билет на запланированный концерт');
+    row.contactEmail = row.deskEmail || row.contactEmail;
+    row.ownerUserId = null;
+    return send(res, 200, EXPANDERS.concerts(row));
   }
 
   const bulk = path.match(/^\/api\/([a-z]+)\/bulk-delete$/);
   if (bulk && method === 'POST') {
     const collection = bulk[1];
     if (!COLLECTIONS.includes(collection)) return fail(res, 404, 'Ресурс не найден');
+    if (!requireEntityWrite(res, user, collection, query.hard === 'true')) return;
     const body = await readBody(req);
     const targetIds = Array.isArray(body && body.ids) ? body.ids.map(Number) : [];
     if (!targetIds.length) {
@@ -510,8 +794,10 @@ async function handle(req, res, url) {
   const action = match[3] || null;
   if (!COLLECTIONS.includes(collection)) return fail(res, 404, 'Ресурс не найден');
   const expand = EXPANDERS[collection];
+  if (!user) return fail(res, 401, 'Требуется вход в систему');
 
   if (action === 'restore' && method === 'POST') {
+    if (!requireRole(res, user, 'admin')) return;
     const row = db[collection].find((item) => item.id === id);
     if (!row) return fail(res, 404, 'Объект не найден');
     const errors = validate(collection, row, id);
@@ -539,6 +825,7 @@ async function handle(req, res, url) {
   }
 
   if (id === null && method === 'POST') {
+    if (!requireEntityWrite(res, user, collection)) return;
     const body = await readBody(req);
     if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
     const errors = validate(collection, body);
@@ -553,6 +840,7 @@ async function handle(req, res, url) {
   }
 
   if (id !== null && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireEntityWrite(res, user, collection)) return;
     const row = db[collection].find((item) => item.id === id && !item.deletedAt);
     if (!row) return fail(res, 404, 'Объект не найден');
     const body = await readBody(req);
@@ -569,6 +857,7 @@ async function handle(req, res, url) {
   }
 
   if (id !== null && method === 'DELETE') {
+    if (!requireEntityWrite(res, user, collection, query.hard === 'true')) return;
     const index = db[collection].findIndex((item) => item.id === id);
     if (index < 0) return fail(res, 404, 'Объект не найден');
     const hard = query.hard === 'true';
@@ -594,10 +883,14 @@ function saveData() {
 
 if (!ephemeral && fs.existsSync(dataFile)) {
   db = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  ensureAuth();
 }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (process.env.STATIC_DIR && !/^\/api(?:\/|$)/.test(url.pathname)) {
+    return require('./static-files').serveStatic(req, res, process.env.STATIC_DIR);
+  }
   if (req.method === 'OPTIONS') {
     cors(res);
     res.writeHead(204);

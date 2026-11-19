@@ -10,6 +10,10 @@ const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://localhost:8080/api',
 );
+
+/// Токен из сборки. Пустое значение — обычный вход через форму.
+const String apiToken = String.fromEnvironment('API_TOKEN');
+
 const int connectTimeoutSeconds = 10;
 
 const int receiveTimeoutSeconds = 15;
@@ -25,3 +29,11 @@ const apiDemoDelayMs = int.fromEnvironment('API_DEMO_DELAY_MS');
 
 /// Принудительный код ошибки списков: `--dart-define=API_DEMO_FAIL=500`.
 const apiDemoFail = int.fromEnvironment('API_DEMO_FAIL');
+
+/// Неактивность до выхода, секунды. Предупреждение показывается за 30 секунд.
+const sessionIdleSeconds =
+    int.fromEnvironment('SESSION_IDLE_SECONDS', defaultValue: 180);
+
+/// Максимальная длина сессии независимо от активности, секунды.
+const sessionMaxSeconds =
+    int.fromEnvironment('SESSION_MAX_SECONDS', defaultValue: 1800);

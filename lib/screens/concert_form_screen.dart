@@ -208,18 +208,18 @@ class _ConcertFormScreenState extends State<ConcertFormScreen> {
     setState(() => _saving = true);
     try {
       await concerts.save(Concert(
-            id: _concert?.id ?? 0,
-            city: form.string('city'),
-            venue: form.string('venue'),
-            date: DateTime.tryParse(form.string('date')) ?? DateTime.now(),
-            ticketPrice: form.number('ticketPrice'),
-            status: form.string('status'),
-            albumId: form.number('albumId'),
-            memberIds: form.selection('memberIds'),
-            ticketCode: form.string('ticketCode'),
-            contactEmail: form.string('contactEmail'),
-            deletedAt: _concert?.deletedAt,
-          ));
+        id: _concert?.id ?? 0,
+        city: form.string('city'),
+        venue: form.string('venue'),
+        date: DateTime.tryParse(form.string('date')) ?? DateTime.now(),
+        ticketPrice: form.number('ticketPrice'),
+        status: form.string('status'),
+        albumId: form.number('albumId'),
+        memberIds: form.selection('memberIds'),
+        ticketCode: form.string('ticketCode'),
+        contactEmail: form.string('contactEmail'),
+        deletedAt: _concert?.deletedAt,
+      ));
       _dirty = false;
       await catalog.load(force: true);
       if (!mounted) return;

@@ -56,7 +56,8 @@ class InMemoryMerchRepository implements MerchRepository {
       _items.fold<int>(0, (maxId, item) => item.id > maxId ? item.id : maxId) +
       1;
   @override
-  Future<PageResult<MerchItem>> find(MerchQuery q, {CancelToken? cancelToken}) async {
+  Future<PageResult<MerchItem>> find(MerchQuery q,
+      {CancelToken? cancelToken}) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (q.stockFrom != null && q.stockTo != null && q.stockFrom! > q.stockTo!) {
       throw ArgumentError('Остаток «от» больше остатка «до»');

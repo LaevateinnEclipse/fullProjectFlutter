@@ -7,8 +7,11 @@ import '../models/concert.dart';
 import '../models/concert_query.dart';
 import '../state/catalog_notifier.dart';
 import '../state/list_notifiers.dart';
+import '../repositories/role_repository.dart';
 import '../widgets/common.dart';
 import '../widgets/entity_table.dart';
+import '../widgets/record_actions.dart';
+import '../widgets/responsive.dart';
 
 class ConcertListScreen extends StatefulWidget {
   final ConcertQuery query;
@@ -57,16 +60,19 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
     final catalog = c.watch<CatalogNotifier>();
     return AppScaffold(
         title: 'Афиша',
-        index: 4,
+        index: 5,
+        onRefresh: n.load,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: () => context.go('/concerts/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Новый концерт')))),
+          const ReadOnlyNotice(collection: 'concerts'),
+          if (canEditCollection(context, 'concerts'))
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                        onPressed: () => context.go('/concerts/new'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый концерт')))),
           filters(n, catalog),
           if (n.hasSelection) selection(n),
           Expanded(child: body(n, catalog)),
@@ -83,88 +89,97 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
 
   Widget filters(ConcertListNotifier n, CatalogNotifier catalog) {
     final q = widget.query;
-    return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(
-              width: 260,
-              child: TextFormField(
-                  initialValue: q.search,
-                  decoration: const InputDecoration(
-                      labelText: 'Поиск: город, площадка, код',
-                      border: OutlineInputBorder()),
-                  onChanged: (v) {
-                    timer?.cancel();
-                    timer = Timer(const Duration(milliseconds: 350),
-                        () => go(q.copyWith(search: v)));
-                  })),
-          SizedBox(
-              width: 200,
-              child: DropdownButtonFormField<String?>(
-                  initialValue:
-                      catalog.cities.contains(q.city) ? q.city : null,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Город', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Все города')),
-                    ...catalog.cities.map((city) => DropdownMenuItem<String?>(
-                        value: city, child: Text(city)))
-                  ],
-                  onChanged: (v) => go(q.copyWith(city: v)))),
-          SizedBox(
-              width: 200,
-              child: DropdownButtonFormField<String?>(
-                  initialValue: q.status,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Статус', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Все статусы')),
-                    ...Concert.statuses.map((status) => DropdownMenuItem<String?>(
-                        value: status, child: Text(concertStatusLabel(status))))
-                  ],
-                  onChanged: (v) => go(q.copyWith(status: v)))),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-                value: q.includeDeleted,
-                onChanged: (v) => go(q.copyWith(includeDeleted: v))),
-            const Text('Удалённые')
-          ]),
-          TextButton(
-              onPressed: q.hasActiveFilters
-                  ? () => go(ConcertQuery(
-                      size: q.size,
-                      sortField: q.sortField,
-                      sortAscending: q.sortAscending))
-                  : null,
-              child: const Text('Сбросить'))
-        ]));
+    return AdaptiveFilters(
+        child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              SizedBox(
+                  width: 260,
+                  child: TextFormField(
+                      initialValue: q.search,
+                      decoration: const InputDecoration(
+                          labelText: 'Поиск: город, площадка, код',
+                          border: OutlineInputBorder()),
+                      onChanged: (v) {
+                        timer?.cancel();
+                        timer = Timer(const Duration(milliseconds: 350),
+                            () => go(q.copyWith(search: v)));
+                      })),
+              SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<String?>(
+                      initialValue:
+                          catalog.cities.contains(q.city) ? q.city : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Город', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Все города')),
+                        ...catalog.cities.map((city) =>
+                            DropdownMenuItem<String?>(
+                                value: city, child: Text(city)))
+                      ],
+                      onChanged: (v) => go(q.copyWith(city: v)))),
+              SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<String?>(
+                      initialValue: q.status,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Статус', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Все статусы')),
+                        ...Concert.statuses.map((status) =>
+                            DropdownMenuItem<String?>(
+                                value: status,
+                                child: Text(concertStatusLabel(status))))
+                      ],
+                      onChanged: (v) => go(q.copyWith(status: v)))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Switch(
+                    value: q.includeDeleted,
+                    onChanged: (v) => go(q.copyWith(includeDeleted: v))),
+                const Text('Удалённые')
+              ]),
+              TextButton(
+                  onPressed: q.hasActiveFilters
+                      ? () => go(ConcertQuery(
+                          size: q.size,
+                          sortField: q.sortField,
+                          sortAscending: q.sortAscending))
+                      : null,
+                  child: const Text('Сбросить'))
+            ])));
   }
 
-  Widget selection(ConcertListNotifier n) => Padding(
-      padding: const EdgeInsets.all(8),
-      child: Wrap(spacing: 8, children: [
-        Text('Выбрано: ${n.selected.length}'),
-        FilledButton(
-            onPressed: () async {
-              if (await confirm(context, 'Удалить выбранные концерты?')) {
-                await _run(() => n.deleteSelected(false));
-              }
-            },
-            child: const Text('Удалить')),
-        OutlinedButton(
-            onPressed: () async {
-              if (await confirm(context, 'Стереть выбранные концерты?',
-                  hard: true)) {
-                await _run(() => n.deleteSelected(true));
-              }
-            },
-            child: const Text('Стереть навсегда')),
-        TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
-      ]));
+  Widget selection(ConcertListNotifier n) {
+    if (!canEditCollection(context, 'concerts')) return const SizedBox.shrink();
+    final erase = canEraseCollection(context);
+    return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Wrap(spacing: 8, children: [
+          Text('Выбрано: ${n.selected.length}'),
+          FilledButton(
+              onPressed: () async {
+                if (await confirm(context, 'Удалить выбранные концерты?')) {
+                  await _run(() => n.deleteSelected(false));
+                }
+              },
+              child: const Text('Удалить')),
+          if (erase)
+            OutlinedButton(
+                onPressed: () async {
+                  if (await confirm(context, 'Стереть выбранные концерты?',
+                      hard: true)) {
+                    await _run(() => n.deleteSelected(true));
+                  }
+                },
+                child: const Text('Стереть навсегда')),
+          TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
+        ]));
+  }
 
   Widget body(ConcertListNotifier n, CatalogNotifier catalog) {
     if (n.status == LoadStatus.idle || n.status == LoadStatus.loading) {
@@ -177,8 +192,9 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
       return const StatusView(text: 'Концерты не найдены.');
     }
     if (MediaQuery.sizeOf(context).width < compactWidth) {
-      return ListView(
-          children: [for (final item in n.result.items) card(n, catalog, item)]);
+      return ListView(children: [
+        for (final item in n.result.items) card(n, catalog, item)
+      ]);
     }
     return EntityTable<Concert>(
         items: n.result.items,
@@ -189,7 +205,8 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
         asc: n.query.sortAscending,
         onSort: (f) => go(n.query.copyWith(
             sortField: f,
-            sortAscending: f == n.query.sortField ? !n.query.sortAscending : true)),
+            sortAscending:
+                f == n.query.sortField ? !n.query.sortAscending : true)),
         columns: [
           ('Город', 'city', (item) => Text(item.city)),
           ('Площадка', null, (item) => Text(item.venue)),
@@ -201,41 +218,56 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
         actions: (item) => actions(n, item));
   }
 
-  Widget card(ConcertListNotifier n, CatalogNotifier catalog, Concert item) =>
-      Card(
-          child: ListTile(
-              leading: Checkbox(
-                  value: n.selected.contains(item.id),
-                  onChanged: (_) => n.toggle(item.id)),
-              title: Text('${item.city} — ${item.venue}'),
-              subtitle: Text(
-                  '${_date(item.date)} • ${concertStatusLabel(item.status)}\n${catalog.albumTitle(item.albumId)} • ${item.ticketPrice} ₽'),
-              isThreeLine: true,
-              trailing: Wrap(children: actions(n, item))));
+  Widget card(ConcertListNotifier n, CatalogNotifier catalog, Concert item) => Card(
+      child: ResponsiveRecordTile(
+          leading: Checkbox(
+              value: n.selected.contains(item.id),
+              onChanged: (_) => n.toggle(item.id)),
+          title: Text('${item.city} — ${item.venue}'),
+          subtitle: Text(
+              '${_date(item.date)} • ${concertStatusLabel(item.status)}\n${catalog.albumTitle(item.albumId)} • ${item.ticketPrice} ₽'),
+          isThreeLine: true,
+          trailing: Wrap(children: actions(n, item))));
 
-  List<Widget> actions(ConcertListNotifier n, Concert item) => [
+  List<Widget> actions(ConcertListNotifier n, Concert item) {
+    final edit = canEditCollection(context, 'concerts');
+    final restore = canRestoreCollection(context);
+    final erase = canEraseCollection(context);
+    final claim =
+        canClaimConcert(context) && !item.isDeleted && item.status == 'plan';
+    return [
+      IconButton(
+          tooltip: 'Карточка',
+          onPressed: () => context.go('/concerts/${item.id}'),
+          icon: const Icon(Icons.visibility_outlined)),
+      if (claim)
         IconButton(
-            tooltip: 'Карточка',
-            onPressed: () => context.go('/concerts/${item.id}'),
-            icon: const Icon(Icons.visibility_outlined)),
+            tooltip: 'Взять билет',
+            onPressed: () => _claim(item.id),
+            icon: const Icon(Icons.confirmation_number_outlined)),
+      if (edit)
         IconButton(
             tooltip: 'Редактировать',
             onPressed: () => context.go('/concerts/${item.id}/edit'),
             icon: const Icon(Icons.edit_outlined)),
-        if (item.isDeleted)
-          IconButton(
-              onPressed: () => _run(() => n.restore(item.id)),
-              icon: const Icon(Icons.restore))
-        else
-          IconButton(
-              onPressed: () async {
-                if (await confirm(context,
-                    'Удалить концерт в ${item.city}, ${item.venue}?')) {
-                  await _run(() => n.softDelete(item.id));
-                }
-              },
-              icon: const Icon(Icons.delete_outline)),
+      if (item.isDeleted && restore)
         IconButton(
+            tooltip: 'Восстановить',
+            onPressed: () => _run(() => n.restore(item.id)),
+            icon: const Icon(Icons.restore))
+      else if (!item.isDeleted && edit)
+        IconButton(
+            tooltip: 'Удалить',
+            onPressed: () async {
+              if (await confirm(
+                  context, 'Удалить концерт в ${item.city}, ${item.venue}?')) {
+                await _run(() => n.softDelete(item.id));
+              }
+            },
+            icon: const Icon(Icons.delete_outline)),
+      if (erase)
+        IconButton(
+            tooltip: 'Стереть навсегда',
             onPressed: () async {
               if (await confirm(
                   context, 'Стереть концерт в ${item.city}, ${item.venue}?',
@@ -244,7 +276,20 @@ class _ConcertListScreenState extends State<ConcertListScreen> {
               }
             },
             icon: const Icon(Icons.delete_forever))
-      ];
+    ];
+  }
+
+  Future<void> _claim(int id) async {
+    try {
+      await context.read<RoleRepository>().claim(id);
+      if (mounted) {
+        toast(context, 'Билет сохранён в личном кабинете');
+        context.go('/my-tickets');
+      }
+    } catch (error) {
+      if (mounted) await showOperationError(context, error);
+    }
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {

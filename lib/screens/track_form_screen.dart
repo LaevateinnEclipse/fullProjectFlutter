@@ -113,14 +113,14 @@ class _TrackFormScreenState extends State<TrackFormScreen> {
     setState(() => _saving = true);
     try {
       await tracks.save(Track(
-            id: _track?.id ?? 0,
-            title: form.string('title'),
-            trackNumber: form.number('trackNumber'),
-            durationSeconds: form.number('durationSeconds'),
-            genre: form.string('genre'),
-            albumId: form.number('albumId'),
-            deletedAt: _track?.deletedAt,
-          ));
+        id: _track?.id ?? 0,
+        title: form.string('title'),
+        trackNumber: form.number('trackNumber'),
+        durationSeconds: form.number('durationSeconds'),
+        genre: form.string('genre'),
+        albumId: form.number('albumId'),
+        deletedAt: _track?.deletedAt,
+      ));
       _dirty = false;
       await catalog.load(force: true);
       if (!mounted) return;
@@ -165,7 +165,9 @@ class _TrackFormScreenState extends State<TrackFormScreen> {
                     key: _entityFormKey,
                     fields: _fields(catalog),
                     formKey: _formKey,
-                    saveLabel: widget.isEditing ? 'Сохранить изменения' : 'Создать трек',
+                    saveLabel: widget.isEditing
+                        ? 'Сохранить изменения'
+                        : 'Создать трек',
                     onSubmit: _save,
                     onCancel: () => context.go('/tracks'),
                     saving: _saving,

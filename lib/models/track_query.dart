@@ -1,7 +1,12 @@
 class TrackQuery {
   static const _unset = Object();
   static const allowedSizes = [10, 25, 50];
-  static const sortFields = ['title', 'trackNumber', 'durationSeconds', 'genre'];
+  static const sortFields = [
+    'title',
+    'trackNumber',
+    'durationSeconds',
+    'genre'
+  ];
   final String search;
   final int? albumId;
   final String? genre;

@@ -8,6 +8,8 @@ import '../state/catalog_notifier.dart';
 import '../state/list_notifiers.dart';
 import '../widgets/common.dart';
 import '../widgets/entity_table.dart';
+import '../widgets/record_actions.dart';
+import '../widgets/responsive.dart';
 
 class TrackListScreen extends StatefulWidget {
   final TrackQuery query;
@@ -36,7 +38,9 @@ class _TrackListScreenState extends State<TrackListScreen> {
   void sync() => context.read<TrackListNotifier>().applyQuery(widget.query);
   void go(TrackQuery q) {
     final p = q.toQueryParameters();
-    context.go(p.isEmpty ? '/tracks' : Uri(path: '/tracks', queryParameters: p).toString());
+    context.go(p.isEmpty
+        ? '/tracks'
+        : Uri(path: '/tracks', queryParameters: p).toString());
   }
 
   @override
@@ -51,16 +55,19 @@ class _TrackListScreenState extends State<TrackListScreen> {
     final catalog = c.watch<CatalogNotifier>();
     return AppScaffold(
         title: 'Треки',
-        index: 3,
+        index: 4,
+        onRefresh: n.load,
         child: Column(children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                      onPressed: () => context.go('/tracks/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Новый трек')))),
+          const ReadOnlyNotice(collection: 'tracks'),
+          if (canEditCollection(context, 'tracks'))
+            Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                        onPressed: () => context.go('/tracks/new'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый трек')))),
           filters(n, catalog),
           if (n.hasSelection) selection(n),
           Expanded(child: body(n, catalog)),
@@ -77,90 +84,100 @@ class _TrackListScreenState extends State<TrackListScreen> {
 
   Widget filters(TrackListNotifier n, CatalogNotifier catalog) {
     final q = widget.query;
-    return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(
-              width: 260,
-              child: TextFormField(
-                  initialValue: q.search,
-                  decoration: const InputDecoration(
-                      labelText: 'Поиск по названию',
-                      border: OutlineInputBorder()),
-                  onChanged: (v) {
-                    timer?.cancel();
-                    timer = Timer(const Duration(milliseconds: 350),
-                        () => go(q.copyWith(search: v)));
-                  })),
-          SizedBox(
-              width: 240,
-              child: DropdownButtonFormField<int?>(
-                  initialValue: catalog.albums.any((album) => album.id == q.albumId)
-                      ? q.albumId
+    return AdaptiveFilters(
+        child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              SizedBox(
+                  width: 260,
+                  child: TextFormField(
+                      initialValue: q.search,
+                      decoration: const InputDecoration(
+                          labelText: 'Поиск по названию',
+                          border: OutlineInputBorder()),
+                      onChanged: (v) {
+                        timer?.cancel();
+                        timer = Timer(const Duration(milliseconds: 350),
+                            () => go(q.copyWith(search: v)));
+                      })),
+              SizedBox(
+                  width: 240,
+                  child: DropdownButtonFormField<int?>(
+                      initialValue:
+                          catalog.albums.any((album) => album.id == q.albumId)
+                              ? q.albumId
+                              : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Альбом', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('Все альбомы')),
+                        ...catalog.albums.map((a) => DropdownMenuItem<int?>(
+                            value: a.id,
+                            child:
+                                Text(a.title, overflow: TextOverflow.ellipsis)))
+                      ],
+                      onChanged: (v) => go(q.copyWith(albumId: v)))),
+              SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<String?>(
+                      initialValue:
+                          catalog.genres.contains(q.genre) ? q.genre : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Жанр', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Все жанры')),
+                        ...catalog.genres.map((g) => DropdownMenuItem<String?>(
+                            value: g,
+                            child: Text(g, overflow: TextOverflow.ellipsis)))
+                      ],
+                      onChanged: (v) => go(q.copyWith(genre: v)))),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Switch(
+                    value: q.includeDeleted,
+                    onChanged: (v) => go(q.copyWith(includeDeleted: v))),
+                const Text('Удалённые')
+              ]),
+              TextButton(
+                  onPressed: q.hasActiveFilters
+                      ? () => go(TrackQuery(
+                          size: q.size,
+                          sortField: q.sortField,
+                          sortAscending: q.sortAscending))
                       : null,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Альбом', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                        value: null, child: Text('Все альбомы')),
-                    ...catalog.albums.map((a) => DropdownMenuItem<int?>(
-                        value: a.id,
-                        child: Text(a.title, overflow: TextOverflow.ellipsis)))
-                  ],
-                  onChanged: (v) => go(q.copyWith(albumId: v)))),
-          SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<String?>(
-                  initialValue:
-                      catalog.genres.contains(q.genre) ? q.genre : null,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Жанр', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Все жанры')),
-                    ...catalog.genres.map((g) => DropdownMenuItem<String?>(
-                        value: g, child: Text(g, overflow: TextOverflow.ellipsis)))
-                  ],
-                  onChanged: (v) => go(q.copyWith(genre: v)))),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-                value: q.includeDeleted,
-                onChanged: (v) => go(q.copyWith(includeDeleted: v))),
-            const Text('Удалённые')
-          ]),
-          TextButton(
-              onPressed: q.hasActiveFilters
-                  ? () => go(TrackQuery(
-                      size: q.size,
-                      sortField: q.sortField,
-                      sortAscending: q.sortAscending))
-                  : null,
-              child: const Text('Сбросить'))
-        ]));
+                  child: const Text('Сбросить'))
+            ])));
   }
 
-  Widget selection(TrackListNotifier n) => Padding(
-      padding: const EdgeInsets.all(8),
-      child: Wrap(spacing: 8, children: [
-        Text('Выбрано: ${n.selected.length}'),
-        FilledButton(
-            onPressed: () async {
-              if (await confirm(context, 'Удалить выбранные треки?')) {
-                await _run(() => n.deleteSelected(false));
-              }
-            },
-            child: const Text('Удалить')),
-        OutlinedButton(
-            onPressed: () async {
-              if (await confirm(context, 'Стереть выбранные треки?', hard: true)) {
-                await _run(() => n.deleteSelected(true));
-              }
-            },
-            child: const Text('Стереть навсегда')),
-        TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
-      ]));
+  Widget selection(TrackListNotifier n) {
+    if (!canEditCollection(context, 'tracks')) return const SizedBox.shrink();
+    final erase = canEraseCollection(context);
+    return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Wrap(spacing: 8, children: [
+          Text('Выбрано: ${n.selected.length}'),
+          FilledButton(
+              onPressed: () async {
+                if (await confirm(context, 'Удалить выбранные треки?')) {
+                  await _run(() => n.deleteSelected(false));
+                }
+              },
+              child: const Text('Удалить')),
+          if (erase)
+            OutlinedButton(
+                onPressed: () async {
+                  if (await confirm(context, 'Стереть выбранные треки?',
+                      hard: true)) {
+                    await _run(() => n.deleteSelected(true));
+                  }
+                },
+                child: const Text('Стереть навсегда')),
+          TextButton(onPressed: n.clear, child: const Text('Снять выделение'))
+        ]));
+  }
 
   Widget body(TrackListNotifier n, CatalogNotifier catalog) {
     if (n.status == LoadStatus.idle || n.status == LoadStatus.loading) {
@@ -185,7 +202,8 @@ class _TrackListScreenState extends State<TrackListScreen> {
         asc: n.query.sortAscending,
         onSort: (f) => go(n.query.copyWith(
             sortField: f,
-            sortAscending: f == n.query.sortField ? !n.query.sortAscending : true)),
+            sortAscending:
+                f == n.query.sortField ? !n.query.sortAscending : true)),
         columns: [
           (
             'Название',
@@ -201,44 +219,56 @@ class _TrackListScreenState extends State<TrackListScreen> {
   }
 
   Widget card(TrackListNotifier n, CatalogNotifier catalog, Track t) => Card(
-      child: ListTile(
+      child: ResponsiveRecordTile(
           leading: Checkbox(
-              value: n.selected.contains(t.id), onChanged: (_) => n.toggle(t.id)),
+              value: n.selected.contains(t.id),
+              onChanged: (_) => n.toggle(t.id)),
           title: Text(t.title),
           subtitle: Text(
               '${catalog.albumTitle(t.albumId)}\n№${t.trackNumber} • ${t.durationLabel} • ${t.genre}'),
           isThreeLine: true,
           trailing: Wrap(children: actions(n, t))));
 
-  List<Widget> actions(TrackListNotifier n, Track t) => [
-        IconButton(
-            tooltip: 'Карточка',
-            onPressed: () => context.go('/tracks/${t.id}'),
-            icon: const Icon(Icons.visibility_outlined)),
+  List<Widget> actions(TrackListNotifier n, Track t) {
+    final edit = canEditCollection(context, 'tracks');
+    final restore = canRestoreCollection(context);
+    final erase = canEraseCollection(context);
+    return [
+      IconButton(
+          tooltip: 'Карточка',
+          onPressed: () => context.go('/tracks/${t.id}'),
+          icon: const Icon(Icons.visibility_outlined)),
+      if (edit)
         IconButton(
             tooltip: 'Редактировать',
             onPressed: () => context.go('/tracks/${t.id}/edit'),
             icon: const Icon(Icons.edit_outlined)),
-        if (t.isDeleted)
-          IconButton(
-              onPressed: () => _run(() => n.restore(t.id)),
-              icon: const Icon(Icons.restore))
-        else
-          IconButton(
-              onPressed: () async {
-                if (await confirm(context, 'Удалить трек «${t.title}»?')) {
-                  await _run(() => n.softDelete(t.id));
-                }
-              },
-              icon: const Icon(Icons.delete_outline)),
+      if (t.isDeleted && restore)
         IconButton(
+            tooltip: 'Восстановить',
+            onPressed: () => _run(() => n.restore(t.id)),
+            icon: const Icon(Icons.restore))
+      else if (!t.isDeleted && edit)
+        IconButton(
+            tooltip: 'Удалить',
             onPressed: () async {
-              if (await confirm(context, 'Стереть трек «${t.title}»?', hard: true)) {
+              if (await confirm(context, 'Удалить трек «${t.title}»?')) {
+                await _run(() => n.softDelete(t.id));
+              }
+            },
+            icon: const Icon(Icons.delete_outline)),
+      if (erase)
+        IconButton(
+            tooltip: 'Стереть навсегда',
+            onPressed: () async {
+              if (await confirm(context, 'Стереть трек «${t.title}»?',
+                  hard: true)) {
                 await _run(() => n.hardDelete(t.id));
               }
             },
             icon: const Icon(Icons.delete_forever))
-      ];
+    ];
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {
