@@ -1,4 +1,5 @@
 Практическая работа 6: адаптивные экраны, релизная сборка, тесты и публикация.
+Репозиторий: https://github.com/LaevateinnEclipse/fullProjectFlutter
 Порядок сборки: [docs/practice6.md](docs/practice6.md).
 
 Релизная сборка с тем же API:
